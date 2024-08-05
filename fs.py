@@ -9,7 +9,7 @@ from rich.table import Table
 from rich.progress import track
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
-app = typer.Typer()
+app = typer.Typer(help=__doc__)
 console = Console()
 
 def get_folder_size(folder_path):
@@ -53,6 +53,9 @@ def main(
     sort_by: str = typer.Option("name", help="Sort by 'name' or 'size'."),
     order: str = typer.Option("asc", help="Order 'asc' for ascending or 'desc' for descending.")
 ):
+    """
+    Calculate the sizes of folders in a specified directory.
+    """
     if not os.path.isdir(directory):
         typer.echo("The provided path is not a directory or does not exist.")
         raise typer.Exit()
