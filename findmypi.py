@@ -35,36 +35,34 @@ def get_hostname(ip):
     except socket.herror:
         return None
 
-def ping_test(ip):
+def get_mac_address_from_arp(current_ip):
     try:
-        output = subprocess.check_output(['ping', '-n', '1', '-w', '1', ip], stderr=subprocess.STDOUT, timeout=2)
-        if b"unreachable" not in output:
-            return ip
-    except subprocess.CalledProcessError:
-        return None
-    except:
-        return None
+        arp_output = subprocess.check_output(['arp', '-a', '-N', current_ip]).decode('utf-8')
+        arp_lines = arp_output.splitlines()
+        devices = []
+        for line in arp_lines:
+            if 'dynamic' in line:
+                parts = line.split()
+                ip = parts[0]
+                mac = parts[1].replace('-', ':')
+                devices.append((ip, mac))
+        return devices
+    except Exception as e:
+        console.print(f":warning: [bold yellow]Error getting MAC addresses from ARP: {e}[/bold yellow]")
+        return []
 
-def scan_local_network(start_ip, end_ip, base_ip, workers):
-    ip_addresses = [f'{base_ip}.{i}' for i in range(start_ip, end_ip + 1)]
-    reachable_ips = []
-
-    with ThreadPoolExecutor(max_workers=workers) as executor:
-        futures = {executor.submit(ping_test, ip): ip for ip in ip_addresses}
-        for future in track(as_completed(futures), total=len(futures), description=""):
-            ip = future.result()
-            if ip:
-                reachable_ips.append(ip)
-
-    return reachable_ips
+def is_raspberry_pi(mac):
+    if not mac:
+        return False
+    mac_prefix = mac.upper()[:8]
+    return any(mac_prefix.startswith(prefix) for prefix in RASPBERRY_PI_MAC_PREFIXES)
 
 @app.command()
 def main(
     base_ip: str = typer.Argument('', help="Base IP address (default: 192.168.45)"),
-    workers: int = typer.Option(100, help="Maximum number of threads (default: 10)")
 ):
     """
-    Scan local network for reachable IP addresses to find Raspberry Pi.
+    Scan local network for Raspberry Pi devices.
     """
 
     if not base_ip:
@@ -76,23 +74,17 @@ def main(
     current_ip = get_current_ip()
     current_hostname = get_hostname(current_ip)
     console.print(f"Current IP: [bold blue]{current_ip}[/bold blue] ([bold magenta]{current_hostname}[/bold magenta])\n")
+
+    devices = get_mac_address_from_arp(current_ip)
+
+    rpi_devices = [ip for ip, mac in devices if is_raspberry_pi(mac)]
     
-    start_ip = 1
-    end_ip = 254
-
-    console.print(f":hourglass: Scanning network for Raspberry Pis...")
-
-    reachable_ips = scan_local_network(start_ip, end_ip, base_ip, workers)
-
-    # remove current IP from the list
-    reachable_ips = [ip for ip in reachable_ips if ip != current_ip]
-
-    if reachable_ips:
-        console.print("\n:sparkles: [bold green]Reachable IPs found:[/bold green]")
-        for ip in reachable_ips:
+    if rpi_devices:
+        console.print(":sparkles: [bold green]Raspberry Pi(s) found:[/bold green]")
+        for ip in rpi_devices:
             console.print(f"[bold cyan]{ip}[/bold cyan] ([bold magenta]Raspberry Pi[/bold magenta])")
     else:
-        console.print(":disappointed: [bold red]No reachable IPs found.[/bold red]")
+        console.print(":disappointed: [bold red]No Raspberry Pi(s) found.[/bold red]")
 
 if __name__ == "__main__":
     app()
