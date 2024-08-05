@@ -3,4 +3,5 @@
 
 | Utility | Description |
 |-------------|-------------------|
-| calcfoldersize.py  | Calculates and displays sizes of folders in a given directory. |
+| fs  | Calculate the sizes of folders in a specified directory |
+| PPT2PDF | Converts all PPTs in a directory to PDFs |
