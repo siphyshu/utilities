@@ -73,9 +73,9 @@ def is_raspberry_pi(mac):
     mac_prefix = mac.upper()[:8]
     return any(mac_prefix.startswith(prefix) for prefix in RASPBERRY_PI_MAC_PREFIXES)
 
-def ping_test(ip):
+def ping_test(ip, timeout):
     try:
-        output = subprocess.check_output(['ping', '-n', '1', '-w', '1', ip], stderr=subprocess.STDOUT, timeout=2)
+        output = subprocess.check_output(['ping', '-n', '1', '-w', '1', ip], stderr=subprocess.STDOUT, timeout=timeout)
         if b"unreachable" not in output:
             return ip
     except subprocess.CalledProcessError:
@@ -83,12 +83,12 @@ def ping_test(ip):
     except:
         return None
 
-def scan_local_network(start_ip, end_ip, base_ip, workers):
+def scan_local_network(start_ip, end_ip, base_ip, workers, timeout):
     ip_addresses = [f'{base_ip}.{i}' for i in range(start_ip, end_ip + 1)]
     reachable_ips = []
 
     with ThreadPoolExecutor(max_workers=workers) as executor:
-        futures = {executor.submit(ping_test, ip): ip for ip in ip_addresses}
+        futures = {executor.submit(ping_test, ip, timeout): ip for ip in ip_addresses}
         for future in track(as_completed(futures), total=len(futures), description=""):
             ip = future.result()
             if ip:
@@ -99,15 +99,16 @@ def scan_local_network(start_ip, end_ip, base_ip, workers):
 @app.command()
 def main(
     base_ip: str = typer.Argument('', help="Base IP address (default: 192.168.45)"),
-    workers: int = typer.Option(100, help="Maximum number of threads (default: 10)")
+    workers: int = typer.Option(100, help="Maximum number of threads (default: 10)"),
+    timeout: int = typer.Option(2, help="Timeout for ping test (default: 2)")
 ):
     """
     Scan local network for Raspberry Pi devices.
     """
 
     current_ip = get_current_ip() if not base_ip else base_ip
-    current_hostname = get_hostname(current_ip)
-    console.print(f"Current IP: [bold blue]{current_ip}[/bold blue] ([bold magenta]{current_hostname}[/bold magenta])\n")
+    # current_hostname = get_hostname(current_ip)
+    console.print(f"Current IP: [bold blue]{current_ip}[/bold blue]\n")
 
     if not base_ip:
         base_ip = get_current_ip()
@@ -123,7 +124,7 @@ def main(
 
     console.print(f":hourglass: Scanning network for Raspberry Pis...")
 
-    reachable_ips = scan_local_network(start_ip, end_ip, base_ip, workers)
+    reachable_ips = scan_local_network(start_ip, end_ip, base_ip, workers, timeout)
     reachable_ips = [ip for ip in reachable_ips if ip != current_ip]    
 
     devices = []
@@ -140,7 +141,7 @@ def main(
         for ip in rpi_devices:
             console.print(f"[bold cyan]{ip}[/bold cyan] ([bold magenta]Raspberry Pi[/bold magenta])")
     else:
-        console.print(":disappointed: [bold red]No Raspberry Pi(s) found.[/bold red]")
+        console.print("\n:disappointed: [bold red]No Raspberry Pi(s) found.[/bold red]")
 
 
 if __name__ == "__main__":
